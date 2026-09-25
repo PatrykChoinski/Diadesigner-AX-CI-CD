@@ -1,0 +1,119 @@
+name: DIADesigner-AX CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  checks: write        # dorny/test-reporter publishes a check run
+
+env:
+  # Bump together when the installer changes: DIA_VERSION invalidates the
+  # actions/cache entry, the asset name must match what is uploaded to the
+  # "Installers" GitHub Release exactly (see installers/README.md).
+  DIA_VERSION: "1.10.0.9242"
+  INSTALLERS_RELEASE_TAG: "Installers"
+  DIA_BUNDLE_ASSET: "DIADesigner-AX-x64-1.10.0.9242.zip"
+  # Only used to "prime" the device/library repositories (see
+  # scripts/dia_build.py) - re-uploaded to this release whenever the
+  # project's device or libraries change, never cached (a cache could
+  # prime with a stale copy), too large to commit (see README.md).
+  PROJECT_ARCHIVE_RELEASE_TAG: "ProjectArchive"
+  PROJECT_ARCHIVE_ASSET: "PilaJednosuportowaSoftmotion.projectarchive"
+  # How long the application must stay in RUN (no STOP/exception) after
+  # Start for the smoke test to pass.
+  OBSERVE_SECONDS: "30"
+
+jobs:
+  build-deploy-test:
+    # Hosted, ephemeral runner - a fresh VM per job, so no Docker or
+    # self-hosted machine is needed for isolation. DIADesigner-AX (and the
+    # CODESYS Control Win V3 x64 SoftMotion runtime bundled with it) is
+    # installed on it from this repo's "Installers" release.
+    #
+    # One job for all three stages: the IDE install is the slow part and
+    # can't be carried over to another job. A failing "Compile project"
+    # step still stops everything after it.
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Only the downloaded bundle zip is cached - the install itself has
+      # to run every time (fresh VM).
+      - name: Cache DIADesigner-AX installer bundle
+        id: cache-dia
+        uses: actions/cache@v4
+        with:
+          path: installers\${{ env.DIA_BUNDLE_ASSET }}
+          key: diadesigner-ax-bundle-${{ env.DIA_VERSION }}
+
+      - name: Download DIADesigner-AX installer bundle
+        if: steps.cache-dia.outputs.cache-hit != 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          New-Item -ItemType Directory -Force -Path installers | Out-Null
+          gh release download "$env:INSTALLERS_RELEASE_TAG" --repo "${{ github.repository }}" `
+            --pattern "$env:DIA_BUNDLE_ASSET" --dir installers --clobber
+
+      - name: Extract DIADesigner-AX installer bundle
+        shell: pwsh
+        run: ./scripts/Expand-Zip.ps1 -ZipPath "installers\$env:DIA_BUNDLE_ASSET" -DestinationDir installers\bundle
+
+      - name: Install DIADesigner-AX
+        shell: pwsh
+        run: ./scripts/Install-DIADesignerAX.ps1 -BundleDir installers\bundle
+
+      - name: Download project archive (device/library priming asset)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "$env:PROJECT_ARCHIVE_RELEASE_TAG" --repo "${{ github.repository }}" `
+            --pattern "$env:PROJECT_ARCHIVE_ASSET" --dir . --clobber
+
+      - name: Compile project
+        shell: pwsh
+        env:
+          # Encryption password of the project/archive - never logged.
+          PROJECT_PASSWORD: ${{ secrets.PROJECT_PASSWORD }}
+        run: ./scripts/Invoke-DiaBuild.ps1
+
+      - name: Deploy to CODESYS Control Win V3 x64 SoftMotion and smoke test
+        shell: pwsh
+        env:
+          PROJECT_PASSWORD: ${{ secrets.PROJECT_PASSWORD }}
+        run: ./scripts/Invoke-DiaDeployTest.ps1 -BundleDir installers\bundle -ObserveSeconds $env:OBSERVE_SECONDS
+
+      - name: Upload reports and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diadesigner-ci-reports
+          path: |
+            reports/*.xml
+            reports/*.log
+            reports/*.csv
+          if-no-files-found: warn
+
+      - name: Publish test summary
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: DIADesigner-AX tests
+          path: reports/junit-*.xml
+          reporter: java-junit
+          fail-on-error: true
+          fail-on-empty: false
+
+      - name: Write consolidated report
+        if: always()
+        shell: pwsh
+        run: ./scripts/Write-Summary.ps1

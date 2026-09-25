@@ -1,0 +1,31 @@
+# DIADesigner-AX / CODESYS working files (per-user, regenerated)
+*.opt
+*.~u
+*.precompilecache
+*.compileinfo
+*.bootinfo
+*.bootinfo_guids
+*.tgs
+*.Device.Application.xml
+
+# Only PilaJednosuportowaSoftmotion.project is part of this repo - the other
+# projects in this folder are unrelated local copies.
+PilaJednosuportowa.*
+PilaJednosuportowa-*
+PilaJednosuportowa_*
+PilaJednosuportowaAI*
+
+# Project archive: only used to "prime" the device/library repository (see
+# scripts/dia_build.py) - too large for git, uploaded to the GitHub Release
+# "ProjectArchive" instead (see README.md).
+*.projectarchive
+
+# DIADesigner-AX installer (uploaded to the GitHub Release "Installers")
+installers/*
+!installers/README.md
+
+# CI artifacts
+/reports/*
+!/reports/.gitkeep
+/work/
+*.log
