@@ -40,6 +40,7 @@ New-Item -ItemType Directory -Force -Path $devicesDir, $librariesDir | Out-Null
 $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $ArchivePath).Path)
 $nDevices = 0
 $nLibraries = 0
+$libIndex = New-Object System.Collections.Generic.List[string]
 try {
     foreach ($entry in $zip.Entries) {
         # The real file name is the last whitespace-separated token of the
@@ -55,6 +56,10 @@ try {
                 $i++
             }
             [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $target)
+            # "<file>\t<Title, 1.2.3.4 (Company)>" - lets dia_build.py skip
+            # libraries that are already installed without trying each one.
+            $display = (($entry.FullName -split '\\', 2)[-1] -split '\s{3,}')[0]
+            $libIndex.Add("$(Split-Path $target -Leaf)`t$display")
             $nLibraries++
         } elseif ($fileName -eq '.zip' -or $entry.FullName -match '\.zip$') {
             $nDevices++
@@ -80,5 +85,6 @@ try {
 } finally {
     $zip.Dispose()
 }
+Set-Content -Path (Join-Path $librariesDir "_index.txt") -Value $libIndex -Encoding utf8
 
 Write-Host "Extracted $nDevices device description(s) and $nLibraries librar(y/ies) from $ArchivePath to $DestinationDir"

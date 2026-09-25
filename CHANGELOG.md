@@ -2,6 +2,13 @@
 
 ## 2026-09-25 (2)
 
+
+### Przyspieszone
+- Priming: biblioteki i urządzenia już obecne w instalacji są pomijane
+  bez prób instalacji (wcześniej ~135 nieudanych prób "already
+  installed", ~4 min); w raporcie czas obu części.
+- Usunięty `actions/cache` paczki instalatora - pobranie 2 GB z Release
+  trwa ~10 s, a zapis do cache ~40 s.
 ### Naprawione
 - CI: priming z `.projectarchive` padał na czystym runnerze -
   `projects.open_archive()` zwracał `None` (headless anuluje dialog

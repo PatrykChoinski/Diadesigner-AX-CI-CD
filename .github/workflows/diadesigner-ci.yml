@@ -12,9 +12,9 @@ permissions:
   checks: write        # dorny/test-reporter publishes a check run
 
 env:
-  # Bump together when the installer changes: DIA_VERSION invalidates the
-  # actions/cache entry, the asset name must match what is uploaded to the
-  # "Installers" GitHub Release exactly (see installers/README.md).
+  # Bump together when the installer changes: the asset name must match
+  # what is uploaded to the "Installers" GitHub Release exactly (see
+  # installers/README.md).
   DIA_VERSION: "1.10.0.9242"
   INSTALLERS_RELEASE_TAG: "Installers"
   DIA_BUNDLE_ASSET: "DIADesigner-AX-x64-1.10.0.9242.zip"
@@ -44,17 +44,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Only the downloaded bundle zip is cached - the install itself has
-      # to run every time (fresh VM).
-      - name: Cache DIADesigner-AX installer bundle
-        id: cache-dia
-        uses: actions/cache@v4
-        with:
-          path: installers\${{ env.DIA_BUNDLE_ASSET }}
-          key: diadesigner-ax-bundle-${{ env.DIA_VERSION }}
-
+      # Not cached: downloading the 2 GB bundle from the release takes ~10 s,
+      # while saving it to actions/cache took ~40 s and restoring it is no
+      # faster than the download.
       - name: Download DIADesigner-AX installer bundle
-        if: steps.cache-dia.outputs.cache-hit != 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
