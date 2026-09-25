@@ -47,6 +47,7 @@ installers/README.md                   - skąd bierze się instalator (GitHub Re
 scripts/
   Assert-ValidZip.ps1                  - walidacja pobranego .zip (rozmiar, sygnatura PK)
   Expand-Zip.ps1                       - rozpakowanie .zip (tar.exe - paczka ma ~2 GB)
+  Expand-ProjectArchive.ps1            - wypakowanie opisów urządzeń i bibliotek z .projectarchive
   Start-SilentInstall.ps1              - uruchomienie instalatora z twardym timeoutem
   Install-DIADesignerAX.ps1            - cicha instalacja DIADesigner-AX z paczki Delty
   Install-SoftMotionRuntime.ps1        - instalacja (jeśli brak) + start runtime SoftMotion i gatewaya
@@ -66,11 +67,15 @@ work/                                  - katalog roboczy (git-ignored)
 
 ### 1. BUILD ([`dia_build.py`](scripts/dia_build.py))
 
-- otwiera `PilaJednosuportowaSoftmotion.projectarchive` (`projects.open_archive`)
-  i **od razu je zamyka** - to tylko "priming": otwarcie archiwum instaluje
-  zawarte w nim opisy urządzeń i biblioteki do repozytoriów całej maszyny,
-  których świeża instalacja DIADesigner-AX na runnerze nie ma (Device
-  Repository Delty i dodatkowe biblioteki to osobne pakiety),
+- z `PilaJednosuportowaSoftmotion.projectarchive` bierze **tylko zależności**
+  ("priming"): [`Expand-ProjectArchive.ps1`](scripts/Expand-ProjectArchive.ps1)
+  wypakowuje z niego opisy urządzeń i skompilowane biblioteki, a
+  `dia_build.py` instaluje je (`device_repository.import_device()`,
+  `librarymanager.install_library()`) - świeża instalacja DIADesigner-AX na
+  runnerze ich nie ma (Device Repository Delty i dodatkowe biblioteki to
+  osobne pakiety). `projects.open_archive()` się tu nie nadaje: na czystej
+  maszynie pyta w dialogu, co zainstalować, headless go anuluje i zwraca
+  `None`,
 - otwiera **żywy `PilaJednosuportowaSoftmotion.project`** i kompiluje
   aktywną aplikację (`generate_code()`); błędy kompilacji (z POU i numerem
   linii) trafiają do raportu i jako adnotacje na stronie przebiegu,

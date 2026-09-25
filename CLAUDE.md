@@ -16,8 +16,11 @@ Zasady pracy Claude w tym repozytorium.
   (`PilaJednosuportowa*`, `PilaJednosuportowaAI*`) są git-ignored i nie
   należą do repo.
 - `.projectarchive` służy **tylko** do zaciągnięcia zależności (opisy
-  urządzeń, biblioteki): build otwiera je i od razu zamyka, a potem
-  pracuje na `.project`. Archiwum nie jest commitowane (za duże) - leży
+  urządzeń, biblioteki): build wypakowuje je (`Expand-ProjectArchive.ps1`)
+  i instaluje przez API (nie `open_archive()` - na czystej maszynie
+  headless zwraca `None`), a potem pracuje na `.project`.
+- Nie uruchamiać lokalnie buildów/deployów bez pytania - użytkownik
+  pracuje w DIADesigner-AX i na lokalnym runtime; weryfikacja przez CI. Archiwum nie jest commitowane (za duże) - leży
   w GitHub Release `ProjectArchive`.
 - Instalator (`DIADesigner-AX-x64-1.10.0.9242.zip`) leży w GitHub Release
   `Installers`, szczegóły w `installers/README.md`.

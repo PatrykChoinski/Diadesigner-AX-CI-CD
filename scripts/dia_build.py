@@ -1,15 +1,18 @@
 """
 CODESYS Scripting entry point for the BUILD stage (run inside DIADesigner-AX):
 
-    DIADesigner-AX.exe --profile="DIADesigner-AX 1.10" --runscript="scripts\\dia_build.py" ^
-        --scriptargs:'"<archive_path>" "<prime_extract_dir>" "<project_path>" "<report_path>" "<password>"' --noUI
+    DIADesigner-AX.exe --profile="DIADesigner-AX 1.10" --runscript="scripts\dia_build.py" ^
+        --scriptargs:'"<deps_dir>" "<project_path>" "<report_path>" "<password>"' --noUI
 
-  1. "Prime" the machine: open PilaJednosuportowaSoftmotion.projectarchive
-     once and close it again right away. Opening an archive installs the
-     device descriptions and libraries bundled in it into the machine-wide
-     repositories - which a fresh DIADesigner-AX install on a CI runner
-     doesn't have (Delta's device repository / extra libraries are separate
-     downloads). The archive's own copy of the code is discarded.
+  1. "Prime" the machine with the dependencies bundled in
+     PilaJednosuportowaSoftmotion.projectarchive - device descriptions and
+     compiled libraries, unpacked into <deps_dir> by
+     Expand-ProjectArchive.ps1 - which a fresh DIADesigner-AX install on a
+     CI runner doesn't have (Delta's device repository / extra libraries
+     are separate downloads). Installed directly via
+     device_repository.import_device() / librarymanager.install_library():
+     projects.open_archive() would ask in a dialog which items to install,
+     headless mode cancels it and the call just returns None.
   2. Open the live PilaJednosuportowaSoftmotion.project and generate code
      for the active application.
   3. Write a JUnit report; exit code != 0 on compile errors.
@@ -17,6 +20,7 @@ CODESYS Scripting entry point for the BUILD stage (run inside DIADesigner-AX):
 The project is never saved - the file in git stays exactly as committed.
 """
 
+import glob
 import os
 import sys
 import time
@@ -29,32 +33,65 @@ from dia_common import write_junit, format_compile_message, open_project
 CompileCategory = Guid("{97F48D64-A2A3-4856-B640-75C046E37EA9}")
 
 
+def _import_devices(devices_dir):
+    """Returns (imported, failed messages)."""
+    source = device_repository.sources[0]
+    imported, failed = 0, []
+    for d in sorted(glob.glob(os.path.join(devices_dir, "*"))):
+        xml = os.path.join(d, "device.xml")
+        if not os.path.isfile(xml):
+            continue
+        try:
+            device_repository.import_device(xml, source, False)
+            imported += 1
+        except Exception as e:  # noqa: BLE001
+            name = open(os.path.join(d, "_name.txt")).read().strip() if os.path.exists(os.path.join(d, "_name.txt")) else d
+            failed.append("%s: %s" % (name, e))
+    device_repository.save_device_cache()
+    return imported, failed
+
+
+def _install_libraries(libraries_dir):
+    """Returns (installed, already present, failed messages)."""
+    repo = librarymanager.repositories[0]
+    installed, present, failed = 0, 0, []
+    for path in sorted(glob.glob(os.path.join(libraries_dir, "*.compiled-library*"))):
+        try:
+            librarymanager.install_library(path, repo, False)
+            installed += 1
+        except Exception as e:  # noqa: BLE001
+            text = "%s" % e
+            if "already" in text.lower() or "exist" in text.lower():
+                present += 1
+            else:
+                failed.append("%s: %s" % (os.path.basename(path), text))
+    return installed, present, failed
+
+
 def main():
-    archive_path, prime_extract_dir, project_path, report_path = sys.argv[1:5]
-    password = sys.argv[5] if len(sys.argv) > 5 else ""
+    deps_dir, project_path, report_path = sys.argv[1:4]
+    password = sys.argv[4] if len(sys.argv) > 4 else ""
 
     cases = []
     exit_code = 1
 
     t0 = time.time()
     try:
-        if archive_path and os.path.exists(archive_path):
-            # Answer "install missing devices/libraries?" style prompts with
-            # their defaults instead of blocking.
-            previous = system.prompt_handling
-            system.prompt_handling = PromptHandling.LogMessageKeys | PromptHandling.LogSimplePrompts
-            try:
-                primer = projects.open_archive(archive_path, prime_extract_dir, overwrite=True,
-                                                encryption_password=password)
-                primer.close()
-            finally:
-                system.prompt_handling = previous
+        if deps_dir and os.path.isdir(deps_dir):
+            n_dev, dev_failed = _import_devices(os.path.join(deps_dir, "devices"))
+            n_lib, n_present, lib_failed = _install_libraries(os.path.join(deps_dir, "libraries"))
+            message = "Devices imported: %d, libraries installed: %d (already present: %d)" % (n_dev, n_lib, n_present)
+            # A dependency that fails to install is only reported here - if
+            # it matters, the compile below fails with the real reason.
+            problems = dev_failed + lib_failed
+            if problems:
+                message += "\nNot installed:\n" + "\n".join(problems)
+            print(message)
             cases.append({"name": "prime_from_projectarchive", "status": "pass",
-                          "message": "Opened and closed %s" % os.path.basename(archive_path),
-                          "time": time.time() - t0})
+                          "message": message, "time": time.time() - t0})
         else:
             cases.append({"name": "prime_from_projectarchive", "status": "pass",
-                          "message": "No project archive at '%s' - skipped" % archive_path,
+                          "message": "No unpacked project archive at '%s' - skipped" % deps_dir,
                           "time": time.time() - t0})
     except Exception:  # noqa: BLE001
         cases.append({"name": "prime_from_projectarchive", "status": "fail",

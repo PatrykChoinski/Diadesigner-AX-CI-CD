@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-09-25 (2)
+
+### Naprawione
+- CI: priming z `.projectarchive` padał na czystym runnerze -
+  `projects.open_archive()` zwracał `None` (headless anuluje dialog
+  wyboru urządzeń/bibliotek do instalacji). Teraz
+  `Expand-ProjectArchive.ps1` wypakowuje z archiwum opisy urządzeń (22) i
+  biblioteki (142), a `dia_build.py` instaluje je przez
+  `device_repository.import_device()` / `librarymanager.install_library()`.
+
 ## 2026-09-25
 
 ### Dodane
