@@ -9,6 +9,10 @@
   `Expand-ProjectArchive.ps1` wypakowuje z archiwum opisy urządzeń (22) i
   biblioteki (142), a `dia_build.py` instaluje je przez
   `device_repository.import_device()` / `librarymanager.install_library()`.
+- CI: instalacja runtime SoftMotion kończyła się `msiexec` 1603 - domyślny
+  katalog MSI leży pod `Program Files (x86)`, który odrzuca jego akcja
+  `CDSCheckTargetdir`. `INSTALLDIR` podawany jawnie (jak `<InstallPath>`
+  w manifeście Delty).
 
 ## 2026-09-25
 

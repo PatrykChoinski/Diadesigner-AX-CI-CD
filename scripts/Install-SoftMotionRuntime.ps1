@@ -53,9 +53,15 @@ if (-not (Test-Path $rteExe)) {
     $msi = Get-ChildItem -Path $msiDir -Filter "*.msi" | Select-Object -First 1
     Write-Host "== Installing $($msi.Name) =="
     $msiLog = Join-Path $LogDir "install-softmotion-rte.msi.log"
+    # INSTALLDIR must be given explicitly (Delta's installer passes the
+    # manifest's <InstallPath>): the MSI's own default points below
+    # "Program Files (x86)\...\DIADesigner-AX 1.6", which its custom action
+    # CDSCheckTargetdir then rejects -> msiexec exit code 1603.
+    $installDir = Split-Path $RuntimeDir -Parent
     & (Join-Path $PSScriptRoot "Start-SilentInstall.ps1") -InstallerPath "$env:SystemRoot\System32\msiexec.exe" -TimeoutMinutes 20 -ArgumentList @(
         "/i", "`"$($msi.FullName)`"",
         "SETUPEXEDIR=`"$msiDir`"",
+        "INSTALLDIR=`"$installDir`"",
         "/qn", "/norestart",
         "/l*v", "`"$msiLog`""
     )
